@@ -2,6 +2,7 @@
 *.mat
 *.fig
 *.wav
+*.mp3
 
 #ignore folders
 #IF/OO/OUTPUTS/
