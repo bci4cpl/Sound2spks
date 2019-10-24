@@ -1,4 +1,5 @@
-% Convert WAV files into mel spectrograms
+% Convert WAV files into mel spectrograms spike trains using the algorithm
+% described in Gutig's paper, and stores the results in MAT files
 
 clear; clc; close all
 dbstop if error
@@ -28,26 +29,27 @@ dt_sim = 1/10;
 
 %DATA_DIR = './WAV_Data'; % directory with WAV files
 DATA_DIR = '/media/shay/DATA/Sound2spks'; % directory with WAV files
-%TODO: DEST_DIR = '/media/shay/DATA/Sound2spks/results'
-DEST_DIR = '~/Sound2spks';
+DEST_DIR = '/media/shay/DATA/Sound2spks/result_mats'
+%DEST_DIR = '~/Sound2spks';
 
 assert(isdir(DATA_DIR));
 assert(isdir(DEST_DIR));
 
 % Loop over sound file
-N_MAX = 10; %inf %100; %TODO: limits the files we process
+N_MAX = 1000; %inf %100; %TODO: limits the files we process
 d = dir(fullfile(DATA_DIR, '*.wav'));
 N_FILES = min(N_MAX,length(d));
 
 total_failures = 0;
 total_spk_times = 0;
-all_spk_times = cell(N_FILES*10, 1); %~N_FILES*10
 for i_file=1:N_FILES
     %fname1 = '2193_4qLAn6_xfCY.wav'; % specific file
     %fname = fullfile(DATA_DIR, fname1);
     
+%     i_file = randi(N_FILES);
     f = d(i_file);
     fname = strcat(f.folder, '/', f.name);
+    n_file_spk_times = 0;
     
     try
         % Load audio file
@@ -90,16 +92,16 @@ for i_file=1:N_FILES
 
         % Extract duration of each time frame
         t = T';
-        dt_actual = t(2)-t(1);
-        n_smooth = round(tau_smooth/dt_actual);
+        dt_frame = t(2)-t(1);
+        n_smooth = round(tau_smooth/dt_frame);
         w_smooth = gausswin(n_smooth); % Gaussian window for smoothing
         w_smooth = w_smooth/sum(w_smooth); % normalize window
-        fprintf("Duration of each frame: %d\n", dt_actual)
+        fprintf("Duration of each frame: %d\n", dt_frame)
 
         % Display frequency vector
-        disp(' ');
-        disp('Frequencies = ');
-        disp(F);
+%         disp(' ');
+%         disp('Frequencies = ');
+%         disp(F);
 
         % Display spectrogram
         % melSpectrogram(audioIn,fs)
@@ -122,7 +124,9 @@ for i_file=1:N_FILES
 
         i_cur = 0;
         total = length(T);
-        cycles = floor(1/dt_actual); %get approx. cycles in one second
+        cycles = floor(1/dt_frame); %get approx. cycles in one second
+        n_file_spk_times = floor(total/cycles);
+        file_spk_times = cell(n_file_spk_times, 1); %~N_FILES*10
         for i_start=1:cycles:total-mod(total, cycles)
             S_cur = S(:,i_start:i_start+cycles-1);
             t_cur = t(:,i_start:i_start+cycles-1)-i_cur; %[0.1]
@@ -184,15 +188,18 @@ for i_file=1:N_FILES
                 xticklabels(xticks()/fs_sim);
                 xlabel('Time (S)')
             end
-
+            
+            
             total_spk_times = total_spk_times+1;
-            all_spk_times{total_spk_times} = spk_times;
-
-
+            
+            file_spk_times{i_cur} = spk_times;
+                        
             % times_tmp2_msec = to_msec_idx(times_tmp2);
             % batchItems(idx_batchitem, k, times_tmp2_msec) = 1;
         end % 1 sec intervals loop
         fprintf('1 sec segments: %d\n', i_cur);
+        
+        assert(i_cur==n_file_spk_times) %sanity, TODO: remove this later
     catch e
         total_failures = total_failures+1;
         fprintf('The processing of `%s` failed.\n', fname)
@@ -200,19 +207,24 @@ for i_file=1:N_FILES
         fprintf('\tMessage: %s\n',e.message);
     end
     
+    % Persist
+    DEST_FILE = fullfile(DEST_DIR, sprintf('spk_times%d.mat', i_file));
+    wav_filename = f.name;
+    dur_in_sec = dur;
+    save(DEST_FILE,'wav_filename', 'dur_in_sec', 'n_file_spk_times',  ...
+        'F', 'numBands' ,'numFrames', 'dt_frame', ...
+        'file_spk_times' ...
+        ,'-v7.3','-nocompression');
+    fprintf('Saved results to `%s`.\n', DEST_FILE)
+
     if ~mod(i_file,1000)
         waitbar(i_file/N_FILES, h_waitbar, ' Processing ...');
     end
 end %N_FILES
 close(h_waitbar);
 fprintf('\n');
-fprintf('all_spk_trains size: %d\n', length(all_spk_times))
+fprintf('total_spk_times: %d\n', total_spk_times)
 fprintf('total_failures: %d\n', total_failures);
-
-all_spk_times = all_spk_times(1:total_spk_times); %only valid
-DEST = fullfile(DEST_DIR, 'wav_dataset.mat');
-save(DEST,'all_spk_times' ,'-v7.3','-nocompression');
-fprintf('Saved results to `%s`.\n', DEST)
 
 function play(name, audioIn, Fs)
     dur = length(audioIn)/Fs;
