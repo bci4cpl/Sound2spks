@@ -26,12 +26,17 @@ f2 = 8000; % upper frequency
 %params for matlab conversion
 dt_sim = 1/10;
 
-%DATA_dir = './WAV_Data'; % directory with WAV files
-DATA_dir = '/media/shay/DATA/Sound2spks'; % directory with WAV files
+%DATA_DIR = './WAV_Data'; % directory with WAV files
+DATA_DIR = '/media/shay/DATA/Sound2spks'; % directory with WAV files
+%TODO: DEST_DIR = '/media/shay/DATA/Sound2spks/results'
+DEST_DIR = '~/Sound2spks';
+
+assert(isdir(DATA_DIR));
+assert(isdir(DEST_DIR));
 
 % Loop over sound file
-N_MAX = inf; %100; %TODO: limits the files we process
-d = dir(fullfile(DATA_dir, '*.wav'));
+N_MAX = 10; %inf %100; %TODO: limits the files we process
+d = dir(fullfile(DATA_DIR, '*.wav'));
 N_FILES = min(N_MAX,length(d));
 
 total_failures = 0;
@@ -39,7 +44,7 @@ total_spk_times = 0;
 all_spk_times = cell(N_FILES*10, 1); %~N_FILES*10
 for i_file=1:N_FILES
     %fname1 = '2193_4qLAn6_xfCY.wav'; % specific file
-    %fname = fullfile(DATA_dir, fname1);
+    %fname = fullfile(DATA_DIR, fname1);
     
     f = d(i_file);
     fname = strcat(f.folder, '/', f.name);
@@ -205,9 +210,9 @@ fprintf('all_spk_trains size: %d\n', length(all_spk_times))
 fprintf('total_failures: %d\n', total_failures);
 
 all_spk_times = all_spk_times(1:total_spk_times); %only valid
-DEST = fullfile(DATA_dir, 'wav_dataset.mat');
-save(DEST,'all_spk_times');
-fprintf('Saved results to `%s`.', DEST)
+DEST = fullfile(DEST_DIR, 'wav_dataset.mat');
+save(DEST,'all_spk_times' ,'-v7.3','-nocompression');
+fprintf('Saved results to `%s`.\n', DEST)
 
 function play(name, audioIn, Fs)
     dur = length(audioIn)/Fs;
