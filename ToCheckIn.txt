@@ -1,0 +1,4 @@
+
+* wav files were moved to /wav_data
+* added deterministic stream to batch item sampling
+

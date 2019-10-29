@@ -1,11 +1,15 @@
-% Convert WAV files into mel spectrograms spike trains using the algorithm
-% described in Gutig's paper, and stores the results in MAT files
+% Convert WAV files into mel spectrograms spike times using the algorithm
+% described in Gutig's paper, 
+% then transforms them into binary spike trains
+% in a form that the EntropyMax simulations expect
+% and finally stores the results in MAT files
 
 clear; clc; close all
 dbstop if error
 
 h_waitbar = waitbar(0,' Starting ...');
 
+%% Parameters
 %general parameters
 plot_flag = 0;
 play_flag = 0;
@@ -24,55 +28,65 @@ NumOfBands = 16; % Like paper of Gutig
 f1 = 360; % lower frequency
 f2 = 8000; % upper frequency
 
-%params for matlab conversion
-dt_sim = 1/10;
+N_NRNS = ((N_th-1)*2+1)*NumOfBands; %neurons
 
-%DATA_DIR = './WAV_Data'; % directory with WAV files
-DATA_DIR = '/media/shay/DATA/Sound2spks'; % directory with WAV files
-DEST_DIR = '/media/shay/DATA/Sound2spks/result_mats'
-%DEST_DIR = '~/Sound2spks';
+%params for binary spike trains conversion
+dt_sim = 1/10;
+fs_sim = 1000 / dt_sim;
+
+DATA_DIR = '/media/shay/DATA/Sound2spks/wav_data'; % directory with WAV files
+DEST_DIR = '/media/shay/DATA/Sound2spks/result_mats';
+
+%source and dest dirs
+% DATA_DIR = '~/Temp/Sound2spks'; % directory with WAV files
+% DEST_DIR = DATA_DIR;
 
 assert(isdir(DATA_DIR));
 assert(isdir(DEST_DIR));
 
 % Loop over sound file
-N_MAX = 1000; %inf %100; %TODO: limits the files we process
+N_MAX = inf; %100; %NOTE: limits the files we process
 d = dir(fullfile(DATA_DIR, '*.wav'));
 N_FILES = min(N_MAX,length(d));
 
+%% Wav to mel -> spikes according to THs -> binary spike trains
 total_failures = 0;
-total_spk_times = 0;
+total_spike_trains = 0;
 for i_file=1:N_FILES
-    %fname1 = '2193_4qLAn6_xfCY.wav'; % specific file
-    %fname = fullfile(DATA_DIR, fname1);
-    
-%     i_file = randi(N_FILES);
     f = d(i_file);
-    fname = strcat(f.folder, '/', f.name);
-    n_file_spk_times = 0;
+    wav_full_name = strcat(f.folder, '/', f.name);
+    n_batch_items = 0;
+    
+    [~, baseFileName, extension] = fileparts(wav_full_name);
+    DEST_FILE = fullfile(DEST_DIR, strcat(baseFileName, '.mat'));
+    if (isfile(DEST_FILE))
+        continue;
+    end
     
     try
+        %% Part 1: load wav and resample to simulation dt
+        
         % Load audio file
-        [audioIn,fs] = audioread(fname); % read audio file and sampling rate
+        [audioIn,fs] = audioread(wav_full_name); % read audio file and sampling rate
         i_chan = 1;
         if (size(audioIn, 2) == 2) % in case of stereo - take only one side
             i_chan = randi(2);
         end
         audioIn = audioIn(:,i_chan);
 
-        dur = length(audioIn)/fs;
-        fprintf('File `%s` duration: %.2f secs ...\n', f.name, dur);
+        dur_in_sec = length(audioIn)/fs;
+        fprintf('[%d/%d] File `%s` duration: %.2f secs ...\n', ...
+            i_file, N_FILES, ...
+            f.name, dur_in_sec);
 
-        %% Resample at a reasonable delta T
-        fs_sim = 1000 / dt_sim;
-
+        %Resample at a reasonable delta T
         %rel = fs/fs_dest;
         %audioIn = ifft(fft(audioIn), length(audioIn)/rel);
 
         %https://www.mathworks.com/help/signal/ref/resample.html
         audioIn_re = resample(audioIn,fs_sim, fs);
 
-        %% Mel spec trans
+        %% Part 2: Mel spec transformation
         if (play_flag)
             play(sprintf('%s.%d', f.name, i_file), audioIn_re, fs_sim);
         end
@@ -122,18 +136,28 @@ for i_file=1:N_FILES
         % subplot(2,1,1);plot(t,S(1,:));xlabel('t (s)');
         % subplot(2,1,2);plot(t,y);xlabel('t (s)');
 
-        i_cur = 0;
+        %% Part 3: Convert Mel to spike times
+        i_batch_item = 0; %1sec batch item counter
         total = length(T);
         cycles = floor(1/dt_frame); %get approx. cycles in one second
-        n_file_spk_times = floor(total/cycles);
-        file_spk_times = cell(n_file_spk_times, 1); %~N_FILES*10
+        n_batch_items = floor(total/cycles);
+        
+        %allocate binary matrix
+        sz = ...
+            [n_batch_items, ... %TOTAL BATCH ITEMS
+            N_NRNS, ... %INPUT NEURONS
+            fs_sim+1]; %TIME OF SIMULATION IN DT UNITS
+        %NOTE: we add one, so it'd be easier later
+
+        batch_items = false(sz);
+        
         for i_start=1:cycles:total-mod(total, cycles)
             S_cur = S(:,i_start:i_start+cycles-1);
-            t_cur = t(:,i_start:i_start+cycles-1)-i_cur; %[0.1]
+            t_cur = t(:,i_start:i_start+cycles-1)-i_batch_item; %[0.1]
             t_cur(t_cur<0) = 0;
             assert(all(t_cur>=0) && all(t_cur<=1))
 
-            i_cur = i_cur+1;
+            i_batch_item = i_batch_item+1;
 
             nrn_count = 0;
             spk_times = struct();
@@ -163,7 +187,8 @@ for i_file=1:N_FILES
                 nrn_count = nrn_count + 1;
                 spk_times(nrn_count).t = t_cur(S1_TH_diff == 1);
             end
-
+            
+            %% Part 4: into binary spike trains
             to_msec_idx = @(in_sec) fix(in_sec*fs_sim)+1; %assuming dt=1, fix=floor and to_int(), +1 to start for idx 1
             spk_train = false(nrn_count, fs_sim+1); %NOTE: we add one, so it'd be easier later
             for i_nrn=1:nrn_count
@@ -175,7 +200,7 @@ for i_file=1:N_FILES
             %disp(size(spk_train))
 
             if plot_flag
-                figure('Name', sprintf('spike train #%d', i_cur))
+                figure('Name', sprintf('spike train #%d', i_batch_item))
 
                 x = 0:fs_sim;
                 for k = 1:nrn_count
@@ -190,40 +215,37 @@ for i_file=1:N_FILES
             end
             
             
-            total_spk_times = total_spk_times+1;
+            total_spike_trains = total_spike_trains+1;
             
-            file_spk_times{i_cur} = spk_times;
+            batch_items(i_batch_item, :, :) = spk_train;
                         
             % times_tmp2_msec = to_msec_idx(times_tmp2);
             % batchItems(idx_batchitem, k, times_tmp2_msec) = 1;
         end % 1 sec intervals loop
-        fprintf('1 sec segments: %d\n', i_cur);
+        fprintf('1 sec segments: %d\n', i_batch_item);
         
-        assert(i_cur==n_file_spk_times) %sanity, TODO: remove this later
+        assert(i_batch_item==n_batch_items) %sanity, TODO: remove this later
+        
+        %% Part 5: persist to mat
+        save(DEST_FILE, 'dur_in_sec', ... 
+            'F', 'numBands' ,'numFrames', 'dt_frame', ...
+            'dt_sim', 'fs_sim', ...
+            'batch_items' ...
+            ,'-v7.3','-nocompression');
     catch e
         total_failures = total_failures+1;
-        fprintf('The processing of `%s` failed.\n', fname)
+        fprintf('The processing of `%s` failed.\n', wav_full_name)
         fprintf('\tIdentifier: %s\n',e.identifier);
         fprintf('\tMessage: %s\n',e.message);
     end
     
-    % Persist
-    DEST_FILE = fullfile(DEST_DIR, sprintf('spk_times%d.mat', i_file));
-    wav_filename = f.name;
-    dur_in_sec = dur;
-    save(DEST_FILE,'wav_filename', 'dur_in_sec', 'n_file_spk_times',  ...
-        'F', 'numBands' ,'numFrames', 'dt_frame', ...
-        'file_spk_times' ...
-        ,'-v7.3','-nocompression');
-    fprintf('Saved results to `%s`.\n', DEST_FILE)
-
     if ~mod(i_file,1000)
         waitbar(i_file/N_FILES, h_waitbar, ' Processing ...');
     end
 end %N_FILES
 close(h_waitbar);
 fprintf('\n');
-fprintf('total_spk_times: %d\n', total_spk_times)
+fprintf('total_spk_times: %d\n', total_spike_trains)
 fprintf('total_failures: %d\n', total_failures);
 
 function play(name, audioIn, Fs)
