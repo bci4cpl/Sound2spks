@@ -1,4 +1,6 @@
-#custom to this repo
+Out/
+OLD/
+
 *.mat
 *.fig
 *.wav
