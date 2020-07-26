@@ -25,7 +25,7 @@ WL = 256; % Window Length
 OLL = round(0.5*WL); % Overlap Length
 FFTL = 2*WL; % FFT Length
 NumOfBands = 16; % Like paper of Gutig
-f1 = 360; % lower frequency
+f1 = 80; %360; % lower frequency
 f2 = 8000; % upper frequency
 
 N_NRNS = ((N_th-1)*2+1)*NumOfBands; %neurons
@@ -71,7 +71,7 @@ for i_file=1:N_FILES
     end
 
     try
-        %% Part 1: load wav and resample to simulation dt
+        %% Part 1: load wav
 
         % Load audio file
         [audioIn,fs] = audioread(wav_full_name); % read audio file and sampling rate

@@ -1,4 +1,5 @@
-
-* wav files were moved to /wav_data
-* added deterministic stream to batch item sampling
+* wav2mel - now from 80-8000Hz
+* added inspect_classification_spectrograms
+* Preparing data for Tempotron (v1+v2)
+* Data filteration and prep (v3)
 
