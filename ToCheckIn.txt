@@ -1,4 +1,5 @@
 * wav2mel: 
-    * we store them compressed, file size ~x23, load time only ~x1.3 vs Uncompressed
-    * simulation duration is now 2.5 secs (instead of 1 sec)
+    * simulation duration is render to `results_mat2.5sec` 2.5 secs segments
+    
+*Numerized notebooks by order of execution (see PhD appendix)
 

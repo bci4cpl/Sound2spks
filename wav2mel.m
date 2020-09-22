@@ -26,7 +26,10 @@ N_th = length(th_vec);
 
 %we are going to multiply this by the "fs_sim"
 %this will also be each batch_item size
-sim_dur_in_sec = 2.5;
+
+%NOTE: change the DATA_DIR also!
+%sim_dur_in_sec = 1; %v1-v3
+sim_dur_in_sec = 2.5; %v4, v5 %for_clf
 
 dt_sim = 1/10;
 fs_sim = sim_dur_in_sec*1000 / dt_sim;
@@ -46,7 +49,8 @@ N_NRNS = ((N_th-1)*2+1)*NumOfBands; %neurons
 if isunix()
     %DELL
     DATA_DIR = '/datasets/spiking/Sound2spks/wav_data'; % directory with WAV files
-    DEST_DIR = '/datasets/spiking/Sound2spks/result_mats';
+    %DEST_DIR = '/datasets/spiking/Sound2spks/result_mats';
+    DEST_DIR = '/datasets/spiking/Sound2spks/result_mats_2.5sec';
     
     %X1E
 %     DATA_DIR = '~/Sound2spks/OLD'; % directory with WAV files
@@ -92,6 +96,11 @@ for i_file=1:N_FILES
         audioIn = audioIn(:,i_chan);
 
         dur_in_sec = length(audioIn)/fs;
+        
+        if dur_in_sec<=sim_dur_in_sec %too small
+            continue;
+        end
+        
         fprintf('[%d/%d] File `%s` duration: %.2f secs ...\n', ...
             i_file, N_FILES, ...
             f.name, dur_in_sec);
